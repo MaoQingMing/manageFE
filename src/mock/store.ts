@@ -571,7 +571,7 @@ export function issueTokens(userId: number) {
 export function revokeRefresh(token: string) {
   const parts = token.split('.')
   if (parts[0] !== 'refresh') return
-  db.refreshTokens = db.refreshTokens.filter((item) => item.id !== parts[2])
+  db.refreshTokens = db.refreshTokens.filter((item) => item.id !== parts[2] || String(item.userId) !== parts[1])
 }
 
 export function pushNotification(partial: Pick<NotificationItem, 'title' | 'content' | 'type'>) {

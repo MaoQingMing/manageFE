@@ -1,10 +1,11 @@
-import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import { takeAuthFault } from './auth.faults'
 import { authRoutes } from './auth.routes'
 import type { MockCtx, Route } from './context'
 import { contentRoutes } from './content.routes'
 import { dashboardRoutes } from './dashboard.routes'
 import { catalogRoutes } from './catalog.routes'
-import { MockError, can, expired, redact, unauthorized, uuid } from './kit'
+import { MockError, accountDisabled, can, expired, redact, unauthorized, uuid } from './kit'
 import { db, permissionsOf, writeAudit } from './store'
 import { systemRoutes } from './system.routes'
 import { tradeRoutes } from './trade.routes'
@@ -94,6 +95,8 @@ export async function handleMock(config: InternalAxiosRequestConfig): Promise<Ax
   await new Promise((resolve) => setTimeout(resolve, 80))
   const trace = traceId()
   const path = readPath(config)
+  const fault = takeAuthFault(path)
+  if (fault === 'network') throw new AxiosError('模拟网络不可用，请重试', 'ERR_NETWORK', config)
   const method = (config.method || 'get').toUpperCase()
   const ctx: MockCtx = {
     method,
@@ -107,6 +110,7 @@ export async function handleMock(config: InternalAxiosRequestConfig): Promise<Ax
   }
   const route = routes.find((item) => item.method === method && match(item.pattern, path))
   try {
+    if (fault === 'server') throw new MockError(500, 50000, '模拟服务暂不可用，请重试')
     if (!route) throw new MockError(404, 40400, `没有这个接口 ${method} ${path}`)
     ctx.params = match(route.pattern, path) || {}
     const token = (ctx.headers.authorization || '').replace(/^Bearer\s+/i, '')
@@ -115,6 +119,7 @@ export async function handleMock(config: InternalAxiosRequestConfig): Promise<Ax
       const user = bearerUser(token)
       if (user === 'expired') throw expired()
       if (!user) throw unauthorized()
+      if (user.status !== 1) throw accountDisabled()
       ctx.user = user
       ctx.operator = user.username
     }

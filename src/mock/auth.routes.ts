@@ -51,8 +51,9 @@ export const authRoutes: Route[] = [
       const found = db.refreshTokens.find((item) => item.id === id && String(item.userId) === userId)
       if (kind !== 'refresh' || !found || found.expiresAt < Date.now()) throw unauthorized('刷新令牌无效')
       db.refreshTokens = db.refreshTokens.filter((item) => item.id !== id)
-      const user = db.users.find((item) => item.id === found.userId && !item.deletedAt && item.status === 1)
+      const user = db.users.find((item) => item.id === found.userId && !item.deletedAt)
       if (!user) throw unauthorized('刷新令牌无效')
+      if (user.status !== 1) throw accountDisabled()
       ctx.operator = user.username
       return issueTokens(user.id)
     },
@@ -60,9 +61,12 @@ export const authRoutes: Route[] = [
   {
     method: 'POST',
     pattern: '/api/v1/auth/logout',
-    auth: true,
+    auth: false,
     handle: (ctx) => {
-      revokeRefresh(String(bodyOf(ctx).refreshToken ?? ''))
+      const token = String(bodyOf(ctx).refreshToken ?? '')
+      const userId = token.split('.')[1]
+      ctx.operator = db.users.find((item) => String(item.id) === userId)?.username || '-'
+      revokeRefresh(token)
       return {}
     },
   },

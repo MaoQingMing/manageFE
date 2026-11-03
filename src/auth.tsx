@@ -1,7 +1,7 @@
-import { Spin } from 'antd'
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api } from '@/api/client'
-import { clearTokens, getAccess, getRefresh, setAuthLostHandler, setTokens } from '@/api/http'
+import { Button, Result, Space, Spin } from 'antd'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { api, restoreAuthUser } from '@/api/client'
+import { clearTokens, getRefresh, isAuthFailure, setAuthLostHandler, setTokens } from '@/api/http'
 import type { AuthUser } from '@/types'
 
 interface AuthState {
@@ -17,28 +17,48 @@ const AuthContext = createContext<AuthState | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [ready, setReady] = useState(false)
+  const [initialError, setInitialError] = useState('')
+  const [attempt, setAttempt] = useState(0)
 
-  const refreshMe = async () => {
+  const refreshMe = useCallback(async () => {
     const me = await api.me()
     setUser(me)
-  }
+  }, [])
 
   useEffect(() => {
     setAuthLostHandler(() => {
-      clearTokens()
       setUser(null)
-      if (!location.pathname.startsWith('/login')) location.assign('/login')
-    })
-    if (!getAccess()) {
+      setInitialError('')
       setReady(true)
-      return
-    }
-    api
-      .me()
-      .then(setUser)
-      .catch(() => clearTokens())
-      .finally(() => setReady(true))
+    })
+    return () => setAuthLostHandler(null)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setReady(false)
+    setInitialError('')
+    const restore = async () => {
+      try {
+        const me = await restoreAuthUser()
+        if (!cancelled) {
+          setUser(me)
+          setReady(true)
+        }
+      } catch (error) {
+        if (cancelled) return
+        if (isAuthFailure(error)) {
+          clearTokens()
+          setUser(null)
+          setReady(true)
+        } else {
+          setInitialError(error instanceof Error ? error.message : '会话加载失败')
+        }
+      }
+    }
+    void restore()
+    return () => { cancelled = true }
+  }, [attempt])
 
   const value = useMemo<AuthState>(
     () => ({
@@ -60,8 +80,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [user, ready],
+    [user, ready, refreshMe],
   )
+
+  if (initialError) {
+    return <Result status="warning" title="暂时无法恢复会话，登录凭证已保留" subTitle={initialError} extra={
+      <Space>
+        <Button type="primary" onClick={() => setAttempt((value) => value + 1)}>重试</Button>
+        <Button onClick={() => { clearTokens(); setUser(null); setInitialError(''); setReady(true) }}>清除会话并重新登录</Button>
+      </Space>
+    } />
+  }
 
   if (!ready) {
     return (

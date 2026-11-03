@@ -31,7 +31,13 @@ import type {
   UploadSession,
   UserItem,
 } from '@/types'
-import { http } from './http'
+import { getAccess, getRefresh, http, refreshAccess } from './http'
+
+export async function restoreAuthUser() {
+  if (!getAccess() && !getRefresh()) return null
+  if (!getAccess()) await refreshAccess()
+  return api.me(true)
+}
 
 async function data<T>(promise: Promise<{ data: { data: T } }>) {
   const response = await promise
@@ -47,11 +53,11 @@ function blobOf(url: string, params?: object) {
 
 export const api = {
   health: () => data<{ status: string; time: string }>(http.get('/api/v1/health')),
-  captcha: () => data<{ captchaId: string; image: string }>(http.get('/api/v1/auth/captcha')),
+  captcha: (signal?: AbortSignal) => data<{ captchaId: string; image: string }>(http.get('/api/v1/auth/captcha', { signal, skipErrorToast: true })),
   login: (body: { username: string; password: string; captchaId: string; captchaCode: string }) =>
     data<LoginResult>(http.post('/api/v1/auth/login', body)),
   logout: (refreshToken: string) => data(http.post('/api/v1/auth/logout', { refreshToken })),
-  me: () => data<AuthUser>(http.get('/api/v1/auth/me')),
+  me: (skipErrorToast = false) => data<AuthUser>(http.get('/api/v1/auth/me', { skipErrorToast })),
   updateProfile: (body: { nickname: string; email: string; phone: string; avatar: string }) => data<AuthUser>(http.put('/api/v1/auth/profile', body)),
   updatePassword: (body: { oldPassword: string; newPassword: string }) => data(http.put('/api/v1/auth/password', body)),
 

@@ -5,5 +5,6 @@ declare module 'axios' {
     skipErrorToast?: boolean
     __retry?: boolean
     __startedAt?: number
+    __accessToken?: string
   }
 }

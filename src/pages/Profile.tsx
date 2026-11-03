@@ -1,8 +1,8 @@
-import { App, Button, Card, Form, Input, Space, Upload } from 'antd'
+import { App, Button, Card, Form, Input, Upload } from 'antd'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
-import { expireAccessLocally } from '@/api/http'
+import { AuthPractice } from '@/components/AuthPractice'
 import { useAuth } from '@/auth'
 import { EndpointAlert } from '@/components/EndpointAlert'
 
@@ -51,11 +51,7 @@ export function ProfilePage() {
           <Button htmlType="submit">修改密码</Button>
         </Form>
       </Card>
-      <Card title="令牌" style={{ marginTop: 16 }}>
-        <Space>
-          <Button onClick={async () => { expireAccessLocally(); await refreshMe(); message.success('Access Token 已过期，并完成了 refresh') }}>模拟 Access Token 过期</Button>
-        </Space>
-      </Card>
+      <AuthPractice />
     </div>
   )
 }

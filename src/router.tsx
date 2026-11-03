@@ -1,6 +1,7 @@
 import { Button, Result } from 'antd'
-import { Navigate, createBrowserRouter, useNavigate } from 'react-router-dom'
+import { Navigate, createBrowserRouter, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAccess } from '@/api/http'
+import { loginPath, postLoginPath } from '@/authNavigation'
 import { useAuth } from '@/auth'
 import { AdminLayout } from '@/layouts/AdminLayout'
 import { AuditsPage } from '@/pages/Audits'
@@ -27,13 +28,14 @@ import { UsersPage } from '@/pages/Users'
 
 function RequireAuth() {
   const { user } = useAuth()
-  if (!user || !getAccess()) return <Navigate to="/login" replace />
+  if (!user || !getAccess()) return <Navigate to={loginPath()} replace />
   return <AdminLayout />
 }
 
 function GuestOnly() {
   const { user } = useAuth()
-  if (user && getAccess()) return <Navigate to="/dashboard" replace />
+  const [params] = useSearchParams()
+  if (user && getAccess()) return <Navigate to={postLoginPath(params.get('redirect'))} replace />
   return <LoginPage />
 }
 
