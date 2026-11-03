@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:auth": "node --experimental-vm-modules --test tests/auth.test.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.2",
