@@ -85,7 +85,13 @@ CSV 建议带 UTF-8 BOM。出错时仍返回 JSON 信封。
 }
 ```
 
-Access Token 建议 2 小时，Refresh Token 建议 7 天。刷新时轮换：旧 refresh 立即失效。退出只作废 refresh。改密码作废该用户全部 refresh。
+Access Token 建议 2 小时，Refresh Token 建议 7 天。刷新时轮换：旧 refresh 立即失效，过期、被撤销或复用的旧 refresh 返回 HTTP 401 / `40100`。
+
+`POST /api/v1/auth/logout` 的请求体为 `{ "refreshToken": "..." }`，以该 refresh 作为撤销凭证，不要求有效 Access Token，也不先自动续期。仅撤销这个 refresh；已撤销、过期或不存在的令牌重复退出均返回成功。这样不会出现「先轮换 refresh，退出却只撤销请求体里的旧 refresh」的问题。
+
+改密码和管理员重置密码作废该用户全部 refresh；改密码页面随后主动退出。已有 Access Token 默认可用到过期，不能把撤销 refresh 等同于立即撤销所有 Access。
+
+**账号禁用采用立即禁止访问的规则**：每次受保护请求和 refresh 都检查账号状态，禁用返回 HTTP 403 / `40301`，前端清会话回登录。普通 RBAC 权限不足返回 `40300`，只拒绝该请求，不退出登录。
 
 请求头：
 
@@ -93,7 +99,19 @@ Access Token 建议 2 小时，Refresh Token 建议 7 天。刷新时轮换：�
 Authorization: Bearer <accessToken>
 ```
 
-`40101` 时前端会带 refreshToken 调 `POST /api/v1/auth/refresh`，成功后重放原请求。
+### 前端续期与错误处理
+
+- BE 必须使用上表中的 HTTP 状态，不能把 HTTP 401/403/500 都改为 200。Mock 与真实 HTTP 错误统一解析 `code/message/traceId`；文件流接口的 JSON 错误也会解析。
+- 只有受保护请求的 `40101` 触发自动续期；`40100` 是未认证/凭证无效，直接回登录。登录、验证码、refresh、logout 不触发自动续期。
+- 同一页面同时收到多个 `40101` 时合并为一次 refresh。成功后保存轮换结果，原请求各重放一次；迟到的旧 Access 请求复用已更新的令牌。重放仍然认证失败则退出，不能无限重试。
+- 当前会话的自动续期返回 `40100/40101/40301` 时清会话。独立调用 refresh 验证旧令牌失败，不会误清当前新会话。
+- 请求或 refresh 超时、断网、HTTP 500 时保留凭证，允许重试。页面初始化的会话恢复失败展示重试入口；只有 refresh 没有 access 时，先 refresh 再请求 me。
+- 登录失效时保留内部 URL（含 query/hash），重新登录后回到该页面；外部地址和登录页自身不能作为回跳目标。
+- 退出后尚未完成的旧续期结果不能重新写入登录凭证。
+- 认证实践入口只在 Mock 模式制造本地故障，不增加 BE 接口。真实 BE 使用短有效期令牌、停服务等方式验证；不能修改 JWT 第三段来模拟过期，那会破坏签名。
+- Mock 数据及 refresh/captcha 记录刷新页面即重置，各标签页独立；跨会话和持久化恢复场景接真实 BE。单页并发合并不等于跨标签页 refresh 协调。
+
+详细操作清单见 [README 的认证场景](../README.md#认证必须练通的场景)。
 
 ## 游标分页
 
